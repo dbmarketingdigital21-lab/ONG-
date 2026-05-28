@@ -1,0 +1,6 @@
+{
+  "name": "Gestão OSC",
+  "description": "Plataforma completa e profissional de gestão para Organizações da Sociedade Civil (OSC). Contém módulos institucionais, financeiros, de estoque, acompanhamento pedagógico, assistência social e psicologia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
