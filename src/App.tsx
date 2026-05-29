@@ -31,6 +31,9 @@ import Pedagogico from './components/Pedagogico';
 import SocialPsicologia from './components/SocialPsicologia';
 import Documentos from './components/Documentos';
 import AuditoriaConfig from './components/AuditoriaConfig';
+import Perfil from './components/Perfil';
+import Usuarios from './components/Usuarios';
+import ContasBancarias from './components/ContasBancarias';
 
 import { 
   Usuario, 
@@ -79,6 +82,7 @@ export default function App() {
   const [processos, setProcessos] = useState<ProcessoJudicial[]>([]);
   const [documentos, setDocumentos] = useState<DocumentoInstitucional[]>([]);
   const [logs, setLogs] = useState<LogSistema[]>([]);
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   
   const [phpSourceCodeManifest, setPhpSourceCodeManifest] = useState({
     sqlitePersistenceAlert: '',
@@ -110,7 +114,8 @@ export default function App() {
         procData,
         docsData,
         logsData,
-        codeData
+        codeData,
+        usersData
       ] = await Promise.all([
         fetchURL('/api/instituicao'),
         fetchURL('/api/financeiro/contas'),
@@ -127,7 +132,8 @@ export default function App() {
         fetchURL('/api/assistencia/processos'),
         fetchURL('/api/documentos'),
         fetchURL('/api/logs'),
-        fetchURL('/api/php-mvc/export-manifest')
+        fetchURL('/api/php-mvc/export-manifest'),
+        fetchURL('/api/usuarios')
       ]);
 
       if (instData && !instData.length) {
@@ -147,6 +153,7 @@ export default function App() {
       setProcessos(procData || []);
       setDocumentos(docsData || []);
       setLogs(logsData || []);
+      setUsuarios(usersData || []);
       if (codeData && codeData.success) {
         setPhpSourceCodeManifest(codeData);
       }
@@ -239,6 +246,68 @@ export default function App() {
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Usuários do Sistema
+  const handleAddUsuario = async (usr: Omit<Usuario, 'id' | 'created_at'>) => {
+    try {
+      const res = await fetch('/api/usuarios', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(usr)
+      });
+      if (res.ok) {
+        await fetchAllData();
+      } else {
+        const err = await res.json();
+        throw new Error(err.message || 'Erro ao adicionar usuário');
+      }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleUpdateUsuario = async (usr: Usuario) => {
+    try {
+      const res = await fetch(`/api/usuarios/${usr.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(usr)
+      });
+      if (res.ok) {
+        await fetchAllData();
+        // Se o usuário atualizado for o logado, atualiza o estado
+        if (currentUser && currentUser.id === usr.id) {
+          setCurrentUser(usr);
+        }
+      } else {
+        const err = await res.json();
+        throw new Error(err.message || 'Erro ao editar usuário');
+      }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
+  const handleDeleteUsuario = async (id: string) => {
+    try {
+      const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        await fetchAllData();
+      } else {
+        const err = await res.json();
+        throw new Error(err.message || 'Erro ao excluir usuário');
+      }
+    } catch (err) {
+      console.error(err);
+      throw err;
     }
   };
 
@@ -777,6 +846,33 @@ export default function App() {
                   documentos={documentos} 
                   onAddDocumento={handleAddDocumento} 
                   onDeleteDocumento={handleDeleteDocumento} 
+                  userRole={currentUser.nivel_acesso}
+                />
+              )}
+
+              {activeTab === 'contas' && (
+                <ContasBancarias
+                  contas={contas}
+                  onAddConta={handleAddConta}
+                  onDeleteConta={handleDeleteConta}
+                  userRole={currentUser.nivel_acesso}
+                />
+              )}
+
+              {activeTab === 'perfil' && (
+                <Perfil
+                  usuario={currentUser}
+                  onUpdateUsuario={handleUpdateUsuario}
+                  setActiveTab={setActiveTab}
+                />
+              )}
+
+              {activeTab === 'usuarios' && (
+                <Usuarios
+                  usuarios={usuarios}
+                  onAddUsuario={handleAddUsuario}
+                  onUpdateUsuario={handleUpdateUsuario}
+                  onDeleteUsuario={handleDeleteUsuario}
                   userRole={currentUser.nivel_acesso}
                 />
               )}

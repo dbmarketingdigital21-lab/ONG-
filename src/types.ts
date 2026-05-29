@@ -7,7 +7,7 @@ export interface Usuario {
   id: string;
   nome: string;
   email: string;
-  nivel_acesso: 'Administrado' | 'Financeiro' | 'Coordenador' | 'Pedagógico' | 'Assistência Social' | 'Psicólogo' | 'Visualizador';
+  nivel_acesso: 'Administrador' | 'Administrado' | 'Financeiro' | 'Coordenador' | 'Pedagógico' | 'Assistência Social' | 'Psicólogo' | 'Visualizador';
   status: 'Ativo' | 'Inativo';
   created_at: string;
 }

@@ -40,6 +40,8 @@ export default function Sidebar({ activeTab, setActiveTab, nivelAcesso }: Sideba
     { id: 'pedagogico', label: 'Pedagógico / Alunos', icon: GraduationCap, roles: ['Administrador', 'Coordenador', 'Pedagógico'] },
     { id: 'social-psicologia', label: 'Ação Social & Prontuários', icon: HeartHandshake, roles: ['Administrador', 'Assistência Social', 'Psicólogo'] },
     { id: 'documentos', label: 'Documentos Seguros', icon: FolderLock, roles: ['Administrador', 'Coordenador'] },
+    { id: 'usuarios', label: 'Usuários & Permissões', icon: UserCheck, roles: ['Administrador'] },
+    { id: 'perfil', label: 'Meu Perfil', icon: Settings, roles: ['All'] },
     { id: 'auditoria', label: 'Logs & Desenvolvedor', icon: Activity, roles: ['Administrador'] }
   ];
 

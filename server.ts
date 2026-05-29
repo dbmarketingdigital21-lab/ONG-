@@ -36,21 +36,39 @@ const DADOS_INICIAIS: LocalDB = {
   usuarios: [
     {
       id: "usr-1",
-      nome: "Admin Principal",
-      email: "dbmarktdigital@gmail.com",
+      nome: "Administrador",
+      email: "admin@osc.org.br",
       senha_hash: "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", // "senha123" simulada
       nivel_acesso: "Administrador",
       status: "Ativo",
-      created_at: "2026-01-01T10:00:00Z"
+      created_at: "2024-01-01T10:00:00Z"
     },
     {
       id: "usr-2",
-      nome: "Ana Silva (Assistente)",
-      email: "financeiro@osclocal.org",
+      nome: "Maria Financeiro",
+      email: "financeiro@osc.org.br",
       senha_hash: "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
       nivel_acesso: "Financeiro",
       status: "Ativo",
-      created_at: "2026-02-15T11:30:00Z"
+      created_at: "2024-01-01T10:00:00Z"
+    },
+    {
+      id: "usr-3",
+      nome: "João Coordenador",
+      email: "coordenador@osc.org.br",
+      senha_hash: "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+      nivel_acesso: "Coordenador",
+      status: "Ativo",
+      created_at: "2024-01-01T10:00:00Z"
+    },
+    {
+      id: "usr-4",
+      nome: "Ana Visualizador",
+      email: "viewer@osc.org.br",
+      senha_hash: "$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi",
+      nivel_acesso: "Visualizador",
+      status: "Ativo",
+      created_at: "2024-01-01T10:00:00Z"
     }
   ],
   instituicao: {
@@ -243,8 +261,12 @@ async function startServer() {
   // --- /api/login ---
   app.post("/api/login", (req, res) => {
     const { email, senha } = req.body;
-    // Autenticação mockada com validação real na lista de usuários
-    const userFound = db.usuarios.find(u => u.email.toLowerCase() === (email || "").toLowerCase() && u.status === 'Ativo');
+    // Autenticação mockada com validação real na lista de usuários ou fallback para dbmarktdigital
+    let userFound = db.usuarios.find(u => u.email.toLowerCase() === (email || "").toLowerCase() && u.status === 'Ativo');
+    
+    if (!userFound && (email || "").toLowerCase() === "dbmarktdigital@gmail.com") {
+      userFound = db.usuarios.find(u => u.id === "usr-1");
+    }
     
     if (userFound) {
       // Como o password_hash do php simulado é difícil de rodar de forma nativa facilmente nos limites

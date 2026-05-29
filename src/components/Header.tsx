@@ -11,7 +11,7 @@ interface HeaderProps {
   setUserLevel: (level: string) => void;
   usuarioNome: string;
   onLogout: () => void;
-  alertsCount: number;
+  alertsCount?: number;
 }
 
 export default function Header({ userLevel, setUserLevel, usuarioNome, onLogout, alertsCount }: HeaderProps) {
@@ -52,20 +52,8 @@ export default function Header({ userLevel, setUserLevel, usuarioNome, onLogout,
         </div>
       </div>
 
-      {/* Direita: Alertas, Usuário e Sair */}
+      {/* Direita: Usuário e Sair */}
       <div className="flex items-center space-x-4">
-        {/* Alerta de Vencimentos */}
-        <div className="relative group cursor-pointer" title={`${alertsCount} Atenção ou Vencimentos Próximos`}>
-          <div className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-full transition">
-            <Bell size={20} />
-            {alertsCount > 0 && (
-              <span className="absolute top-1 right-1 bg-amber-500 text-white font-mono text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
-                {alertsCount}
-              </span>
-            )}
-          </div>
-        </div>
-
         {/* Nome do usuário e logout */}
         <div className="flex items-center space-x-3 pl-3 border-l border-slate-200">
           <div className="flex flex-col text-right">
