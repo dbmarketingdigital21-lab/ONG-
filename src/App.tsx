@@ -55,13 +55,20 @@ import {
 } from './types';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
+    const saved = localStorage.getItem('osc_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('osc_token'));
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
   // Login inputs properties
-  const [email, setEmail] = useState('dbmarktdigital@gmail.com');
-  const [senha, setSenha] = useState('senha123'); // Password mock
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -161,6 +168,47 @@ export default function App() {
       console.error("Erro unificando fetch de dados:", err);
     }
   };
+
+  // Synchronize token in localStorage and transparently intercept/wrap global fetch API
+  useEffect(() => {
+    if (token) {
+      localStorage.setItem('osc_token', token);
+      if (currentUser) {
+        localStorage.setItem('osc_user', JSON.stringify(currentUser));
+      }
+      
+      const originalFetch = window.fetch;
+      window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const nextInit = { ...init };
+        const nextHeaders = new Headers(nextInit.headers || {});
+        if (!nextHeaders.has('Authorization')) {
+          nextHeaders.set('Authorization', `Bearer ${token}`);
+        }
+        nextInit.headers = nextHeaders;
+        
+        try {
+          const res = await originalFetch(input, nextInit);
+          if (res.status === 401) {
+            // Expired or invalid JWT token on backend side, log out immediately
+            setToken(null);
+            setCurrentUser(null);
+            localStorage.removeItem('osc_token');
+            localStorage.removeItem('osc_user');
+          }
+          return res;
+        } catch (error) {
+          throw error;
+        }
+      };
+      
+      return () => {
+        window.fetch = originalFetch;
+      };
+    } else {
+      localStorage.removeItem('osc_token');
+      localStorage.removeItem('osc_user');
+    }
+  }, [token, currentUser]);
 
   useEffect(() => {
     if (token) {
@@ -661,7 +709,7 @@ export default function App() {
                   <input
                     type="email"
                     required
-                    placeholder="dbmarktdigital@gmail.com"
+                    placeholder="usuario@osc.org.br"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="bg-transparent text-xs w-full focus:outline-none text-slate-800"
