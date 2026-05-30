@@ -25,10 +25,11 @@ import { Usuario } from '../types';
 interface PerfilProps {
   usuario: Usuario;
   onUpdateUsuario: (usr: Usuario) => Promise<void>;
+  onChangePassword: (oldP: string, newP: string) => Promise<void>;
   setActiveTab: (tab: string) => void;
 }
 
-export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: PerfilProps) {
+export default function Perfil({ usuario, onUpdateUsuario, onChangePassword, setActiveTab }: PerfilProps) {
   const [nome, setNome] = useState(usuario.nome);
   const [email, setEmail] = useState(usuario.email);
   const [passwordOld, setPasswordOld] = useState('');
@@ -36,8 +37,9 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
   const [passwordConfirm, setPasswordConfirm] = useState('');
   
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [pwdLoading, setPwdLoading] = useState(false);
   
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [pwdMessage, setPwdMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -59,7 +61,7 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
     }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwdMessage(null);
     if (!passwordOld || !passwordNew || !passwordConfirm) {
@@ -68,11 +70,18 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
     if (passwordNew !== passwordConfirm) {
       return setPwdMessage({ text: 'A nova senha e a confirmação não conferem.', type: 'error' });
     }
-    // Sucesso simulado proativo
-    setPwdMessage({ text: 'Senha alterada com sucesso!', type: 'success' });
-    setPasswordOld('');
-    setPasswordNew('');
-    setPasswordConfirm('');
+    setPwdLoading(true);
+    try {
+      await onChangePassword(passwordOld, passwordNew);
+      setPwdMessage({ text: 'Senha alterada com sucesso!', type: 'success' });
+      setPasswordOld('');
+      setPasswordNew('');
+      setPasswordConfirm('');
+    } catch (err: any) {
+      setPwdMessage({ text: err.message || 'Erro ao alterar a senha.', type: 'error' });
+    } finally {
+      setPwdLoading(false);
+    }
   };
 
   // 8 Módulos de permissão da foto
@@ -87,7 +96,7 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
     { title: 'Logs', icon: Activity, tab: 'auditoria', emoji: '📋' },
   ];
 
-  const firstLetter = nome ? nome.charAt(0).toUpperCase() : 'A';
+  const firstLetter = usuario.nome ? usuario.nome.charAt(0).toUpperCase() : 'A';
 
   return (
     <div className="space-y-6">
@@ -103,8 +112,8 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
             {firstLetter}
           </div>
           <div className="text-center sm:text-left space-y-1">
-            <h3 className="text-lg font-bold text-slate-900 font-display">{nome}</h3>
-            <p className="text-xs text-slate-400 font-mono font-medium">{email}</p>
+            <h3 className="text-lg font-bold text-slate-900 font-display">{nome || usuario.nome}</h3>
+            <p className="text-xs text-slate-400 font-mono font-medium">{email || usuario.email}</p>
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#10b981]/5 text-[#10b981] border border-[#10b981]/15">
               {usuario.nivel_acesso}
             </span>
@@ -112,9 +121,10 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
         </div>
         <button
           onClick={handleUpdateProfile}
-          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold hover:bg-blue-700 transition cursor-pointer"
+          disabled={loading}
+          className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-blue-700 transition cursor-pointer"
         >
-          Salvar Dados
+          {loading ? 'Salvando...' : 'Salvar Perfil'}
         </button>
       </div>
 
@@ -139,7 +149,6 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
                 {message.text}
               </div>
             )}
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <div>
                 <label className="block text-slate-600 font-bold mb-1 font-display">Nome Completo</label>
@@ -149,10 +158,10 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
                   </span>
                   <input
                     type="text"
-                    required
                     value={nome}
-                    onChange={(e) => setNome(e.target.value)}
-                    className="w-full bg-white border border-slate-205 rounded-xl pl-9 pr-3 py-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#38bdf8] focus:border-[#38bdf8] transition font-sans"
+                    onChange={e => setNome(e.target.value)}
+                    required
+                    className="w-full bg-white border border-slate-205 rounded-xl pl-9 pr-3 py-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition font-sans"
                   />
                 </div>
               </div>
@@ -164,10 +173,10 @@ export default function Perfil({ usuario, onUpdateUsuario, setActiveTab }: Perfi
                   </span>
                   <input
                     type="email"
-                    required
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-white border border-slate-205 rounded-xl pl-9 pr-3 py-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-[#38bdf8] focus:border-[#38bdf8] transition font-sans"
+                    onChange={e => setEmail(e.target.value)}
+                    required
+                    className="w-full bg-white border border-slate-205 rounded-xl pl-9 pr-3 py-2.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition font-sans"
                   />
                 </div>
               </div>

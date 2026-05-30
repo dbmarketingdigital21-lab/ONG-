@@ -55,13 +55,20 @@ import {
 } from './types';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(() => {
+    const saved = localStorage.getItem('osc_user');
+    try {
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('osc_token'));
   const [activeTab, setActiveTab] = useState<string>('dashboard');
 
   // Login inputs properties
-  const [email, setEmail] = useState('dbmarktdigital@gmail.com');
-  const [senha, setSenha] = useState('senha123'); // Password mock
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -94,7 +101,7 @@ export default function App() {
   const fetchAllData = async () => {
     try {
       const fetchURL = async (route: string) => {
-        const res = await fetch(route);
+        const res = await authFetch(route);
         return res.ok ? res.json() : [];
       };
 
@@ -164,6 +171,36 @@ export default function App() {
 
   useEffect(() => {
     if (token) {
+      localStorage.setItem('osc_token', token);
+      if (currentUser) {
+        localStorage.setItem('osc_user', JSON.stringify(currentUser));
+      }
+    } else {
+      localStorage.removeItem('osc_token');
+      localStorage.removeItem('osc_user');
+    }
+  }, [token, currentUser]);
+
+  const authFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const nextInit = { ...init };
+    const nextHeaders = new Headers(nextInit.headers || {});
+    if (token && !nextHeaders.has('Authorization')) {
+      nextHeaders.set('Authorization', `Bearer ${token}`);
+    }
+    nextInit.headers = nextHeaders;
+    
+    const res = await window.fetch(input, nextInit);
+    if (res.status === 401) {
+      setToken(null);
+      setCurrentUser(null);
+      localStorage.removeItem('osc_token');
+      localStorage.removeItem('osc_user');
+    }
+    return res;
+  };
+
+  useEffect(() => {
+    if (token) {
       fetchAllData();
     }
   }, [token]);
@@ -175,7 +212,7 @@ export default function App() {
     setLoginError(null);
 
     try {
-      const res = await fetch('/api/login', {
+      const res = await authFetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, senha })
@@ -201,21 +238,11 @@ export default function App() {
     setActiveTab('dashboard');
   };
 
-  // Simulating custom role switching for testing
-  const handleLevelAcessoChange = (nivel: any) => {
-    if (currentUser) {
-      setCurrentUser({
-        ...currentUser,
-        nivel_acesso: nivel
-      });
-    }
-  };
-
   // Mutators:
   // 1. Instituicao
   const handleSaveInstituicao = async (dadosNovos: Partial<InstituicaoType>) => {
     try {
-      const res = await fetch('/api/instituicao', {
+      const res = await authFetch('/api/instituicao', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dadosNovos)
@@ -229,7 +256,7 @@ export default function App() {
   // 2. Financeiro: Contas
   const handleAddConta = async (conta: Omit<ContaBancaria, 'id'>) => {
     try {
-      const res = await fetch('/api/financeiro/contas', {
+      const res = await authFetch('/api/financeiro/contas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(conta)
@@ -242,7 +269,7 @@ export default function App() {
 
   const handleDeleteConta = async (id: string) => {
     try {
-      const res = await fetch(`/api/financeiro/contas/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/financeiro/contas/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -250,9 +277,9 @@ export default function App() {
   };
 
   // Usuários do Sistema
-  const handleAddUsuario = async (usr: Omit<Usuario, 'id' | 'created_at'>) => {
+  const handleAddUsuario = async (usr: Omit<Usuario, 'id' | 'created_at'> & { senha?: string }) => {
     try {
-      const res = await fetch('/api/usuarios', {
+      const res = await authFetch('/api/usuarios', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -271,9 +298,26 @@ export default function App() {
     }
   };
 
+  const handleChangePassword = async (oldPass: string, newPass: string) => {
+    try {
+      const res = await authFetch(`/api/usuarios/${currentUser?.id}/senha`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senhaAtual: oldPass, novaSenha: newPass })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Erro ao alterar a senha');
+      }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
+  };
+
   const handleUpdateUsuario = async (usr: Usuario) => {
     try {
-      const res = await fetch(`/api/usuarios/${usr.id}`, {
+      const res = await authFetch(`/api/usuarios/${usr.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -298,7 +342,7 @@ export default function App() {
 
   const handleDeleteUsuario = async (id: string) => {
     try {
-      const res = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/usuarios/${id}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchAllData();
       } else {
@@ -314,7 +358,7 @@ export default function App() {
   // Receitas
   const handleAddReceita = async (rec: Omit<Receita, 'id'>) => {
     try {
-      const res = await fetch('/api/financeiro/receitas', {
+      const res = await authFetch('/api/financeiro/receitas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(rec)
@@ -327,7 +371,7 @@ export default function App() {
 
   const handleDeleteReceita = async (id: string) => {
     try {
-      const res = await fetch(`/api/financeiro/receitas/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/financeiro/receitas/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -337,7 +381,7 @@ export default function App() {
   // Despesas
   const handleAddDespesa = async (des: Omit<Despesa, 'id'>) => {
     try {
-      const res = await fetch('/api/financeiro/despesas', {
+      const res = await authFetch('/api/financeiro/despesas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(des)
@@ -350,7 +394,7 @@ export default function App() {
 
   const handleDeleteDespesa = async (id: string) => {
     try {
-      const res = await fetch(`/api/financeiro/despesas/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/financeiro/despesas/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -360,7 +404,7 @@ export default function App() {
   // 3. Estoque (Almoxarifado)
   const handleAddEstoque = async (item: Omit<ItemEstoque, 'id' | 'status'>) => {
     try {
-      const res = await fetch('/api/estoque', {
+      const res = await authFetch('/api/estoque', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item)
@@ -373,7 +417,7 @@ export default function App() {
 
   const handleUpdateEstoque = async (id: string, item: Omit<ItemEstoque, 'id' | 'status'>) => {
     try {
-      const res = await fetch(`/api/estoque/${id}`, {
+      const res = await authFetch(`/api/estoque/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item)
@@ -386,7 +430,7 @@ export default function App() {
 
   const handleDeleteEstoque = async (id: string) => {
     try {
-      const res = await fetch(`/api/estoque/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/estoque/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -396,7 +440,7 @@ export default function App() {
   // 4. Fornecedores
   const handleAddFornecedor = async (forn: Omit<Fornecedor, 'id'>) => {
     try {
-      const res = await fetch('/api/fornecedores', {
+      const res = await authFetch('/api/fornecedores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(forn)
@@ -409,7 +453,7 @@ export default function App() {
 
   const handleDeleteFornecedor = async (id: string) => {
     try {
-      const res = await fetch(`/api/fornecedores/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/fornecedores/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -419,7 +463,7 @@ export default function App() {
   // 5. Equipe: Dirigentes e Coordenadores
   const handleAddDirigente = async (dir: Omit<Dirigente, 'id'>) => {
     try {
-      const res = await fetch('/api/dirigentes', {
+      const res = await authFetch('/api/dirigentes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dir)
@@ -432,7 +476,7 @@ export default function App() {
 
   const handleDeleteDirigente = async (id: string) => {
     try {
-      const res = await fetch(`/api/dirigentes/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/dirigentes/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -441,7 +485,7 @@ export default function App() {
 
   const handleAddCoordenador = async (coor: Omit<Coordenador, 'id'>) => {
     try {
-      const res = await fetch('/api/coordenadores', {
+      const res = await authFetch('/api/coordenadores', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(coor)
@@ -454,7 +498,7 @@ export default function App() {
 
   const handleDeleteCoordenador = async (id: string) => {
     try {
-      const res = await fetch(`/api/coordenadores/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/coordenadores/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -464,7 +508,7 @@ export default function App() {
   // 6. Pedagogico (Estudantes)
   const handleAddEstudante = async (est: Omit<Estudante, 'id'>) => {
     try {
-      const res = await fetch('/api/pedagogico', {
+      const res = await authFetch('/api/pedagogico', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(est)
@@ -477,7 +521,7 @@ export default function App() {
 
   const handleUpdateEstudante = async (id: string, est: Partial<Estudante>) => {
     try {
-      const res = await fetch(`/api/pedagogico/${id}`, {
+      const res = await authFetch(`/api/pedagogico/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(est)
@@ -490,7 +534,7 @@ export default function App() {
 
   const handleDeleteEstudante = async (id: string) => {
     try {
-      const res = await fetch(`/api/pedagogico/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/pedagogico/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -500,7 +544,7 @@ export default function App() {
   // 7. Assistência Social: Processos, Prontuários, Cestas, Termos
   const handleAddProcesso = async (proc: Omit<ProcessoJudicial, 'id'>) => {
     try {
-      const res = await fetch('/api/assistencia/processos', {
+      const res = await authFetch('/api/assistencia/processos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(proc)
@@ -513,7 +557,7 @@ export default function App() {
 
   const handleDeleteProcesso = async (id: string) => {
     try {
-      const res = await fetch(`/api/assistencia/processos/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/assistencia/processos/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -522,7 +566,7 @@ export default function App() {
 
   const handleAddProntuario = async (pront: Omit<Prontuario, 'id' | 'data' | 'hora'>) => {
     try {
-      const res = await fetch('/api/assistencia/prontuarios', {
+      const res = await authFetch('/api/assistencia/prontuarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pront)
@@ -535,7 +579,7 @@ export default function App() {
 
   const handleDeleteProntuario = async (id: string) => {
     try {
-      const res = await fetch(`/api/assistencia/prontuarios/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/assistencia/prontuarios/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -544,7 +588,7 @@ export default function App() {
 
   const handleAddCesta = async (cesta: Omit<CestaBasica, 'id' | 'data_entrega'>) => {
     try {
-      const res = await fetch('/api/assistencia/cestas', {
+      const res = await authFetch('/api/assistencia/cestas', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cesta)
@@ -557,7 +601,7 @@ export default function App() {
 
   const handleDeleteCesta = async (id: string) => {
     try {
-      const res = await fetch(`/api/assistencia/cestas/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/assistencia/cestas/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -566,7 +610,7 @@ export default function App() {
 
   const handleAddTermo = async (termo: Omit<TermoResponsabilidade, 'id' | 'data_criacao'>) => {
     try {
-      const res = await fetch('/api/assistencia/termos', {
+      const res = await authFetch('/api/assistencia/termos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(termo)
@@ -579,7 +623,7 @@ export default function App() {
 
   const handleDeleteTermo = async (id: string) => {
     try {
-      const res = await fetch(`/api/assistencia/termos/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/assistencia/termos/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -589,7 +633,7 @@ export default function App() {
   // 8. Documentos
   const handleAddDocumento = async (doc: Omit<DocumentoInstitucional, 'id' | 'data_upload'>) => {
     try {
-      const res = await fetch('/api/documentos', {
+      const res = await authFetch('/api/documentos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(doc)
@@ -602,7 +646,7 @@ export default function App() {
 
   const handleDeleteDocumento = async (id: string) => {
     try {
-      const res = await fetch(`/api/documentos/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/documentos/${id}`, { method: 'DELETE' });
       if (res.ok) fetchAllData();
     } catch (err) {
       console.error(err);
@@ -661,7 +705,7 @@ export default function App() {
                   <input
                     type="email"
                     required
-                    placeholder="dbmarktdigital@gmail.com"
+                    placeholder="usuario@osc.org.br"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="bg-transparent text-xs w-full focus:outline-none text-slate-800"
@@ -731,7 +775,6 @@ export default function App() {
         {/* Header topo */}
         <Header 
           userLevel={currentUser.nivel_acesso} 
-          setUserLevel={handleLevelAcessoChange} 
           usuarioNome={currentUser.nome} 
           onLogout={handleLogout} 
           alertsCount={documentos.filter(d => d.validade !== 'Sem vencimento' && d.validade !== 'Ativo').length}
@@ -863,6 +906,7 @@ export default function App() {
                 <Perfil
                   usuario={currentUser}
                   onUpdateUsuario={handleUpdateUsuario}
+                  onChangePassword={handleChangePassword}
                   setActiveTab={setActiveTab}
                 />
               )}
@@ -874,6 +918,7 @@ export default function App() {
                   onUpdateUsuario={handleUpdateUsuario}
                   onDeleteUsuario={handleDeleteUsuario}
                   userRole={currentUser.nivel_acesso}
+                  currentUserId={currentUser.id}
                 />
               )}
 

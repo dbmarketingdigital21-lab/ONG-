@@ -22,10 +22,11 @@ import { Usuario } from '../types';
 
 interface UsuariosProps {
   usuarios: Usuario[];
-  onAddUsuario: (usr: Omit<Usuario, 'id' | 'created_at'>) => Promise<void>;
+  onAddUsuario: (usr: Omit<Usuario, 'id' | 'created_at'> & { senha?: string }) => Promise<void>;
   onUpdateUsuario: (usr: Usuario) => Promise<void>;
   onDeleteUsuario: (id: string) => Promise<void>;
   userRole: string;
+  currentUserId?: string;
 }
 
 export default function Usuarios({
@@ -33,7 +34,8 @@ export default function Usuarios({
   onAddUsuario,
   onUpdateUsuario,
   onDeleteUsuario,
-  userRole
+  userRole,
+  currentUserId
 }: UsuariosProps) {
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,12 +46,14 @@ export default function Usuarios({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, name: string } | null>(null);
 
   // Form States
   const [formNome, setFormNome] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formNivel, setFormNivel] = useState<'Administrado' | 'Financeiro' | 'Coordenador' | 'Pedagógico' | 'Assistência Social' | 'Psicólogo' | 'Visualizador'>('Financeiro');
   const [formStatus, setFormStatus] = useState<'Ativo' | 'Inativo'>('Ativo');
+  const [formSenha, setFormSenha] = useState('');
 
   const canEdit = userRole === 'Administrador';
 
@@ -75,16 +79,18 @@ export default function Usuarios({
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formNome || !formEmail) return alert('Por favor, preencha os dados obrigatórios');
+    if (!formNome || !formEmail || !formSenha) return alert('Por favor, preencha os dados obrigatórios');
     try {
       await onAddUsuario({
         nome: formNome,
         email: formEmail,
+        senha: formSenha,
         nivel_acesso: formNivel,
         status: formStatus
       });
       setFormNome('');
       setFormEmail('');
+      setFormSenha('');
       setFormNivel('Financeiro');
       setFormStatus('Ativo');
       setShowAddModal(false);
@@ -120,13 +126,17 @@ export default function Usuarios({
     }
   };
 
-  const handleDeleteClick = async (id: string, name: string) => {
-    if (confirm(`Tem certeza que deseja remover o usuário ${name}?`)) {
-      try {
-        await onDeleteUsuario(id);
-      } catch (err) {
-        alert('Erro ao excluir usuário');
-      }
+  const handleDeleteClick = (id: string, name: string) => {
+    setDeleteConfirm({ id, name });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    try {
+      await onDeleteUsuario(deleteConfirm.id);
+      setDeleteConfirm(null);
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir usuário');
     }
   };
 
@@ -310,14 +320,16 @@ export default function Usuarios({
                     </td>
                     <td className="p-4 text-right pr-6">
                       <div className="flex items-center justify-end space-x-1.5">
-                        <button
-                          onClick={() => handleEditClick(u)}
-                          className="p-1.5 text-slate-450 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                          title="Editar Usuário"
-                        >
-                          <Edit size={14} />
-                        </button>
-                        {canEdit && u.id !== 'usr-1' && (
+                        {canEdit && u.id !== currentUserId && (
+                          <button
+                            onClick={() => handleEditClick(u)}
+                            className="p-1.5 text-slate-450 hover:text-blue-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                            title="Editar Usuário"
+                          >
+                            <Edit size={14} />
+                          </button>
+                        )}
+                        {canEdit && u.id !== currentUserId && (
                           <button
                             onClick={() => handleDeleteClick(u.id, u.nome)}
                             className="p-1.5 text-slate-450 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
@@ -422,6 +434,23 @@ export default function Usuarios({
                     placeholder="Ex: maria.souza@osc.org.br"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-slate-850 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-bold mb-1 font-display">Senha</label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-450">
+                    <Lock size={14} />
+                  </span>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Mínimo 6 caracteres"
+                    value={formSenha}
+                    onChange={(e) => setFormSenha(e.target.value)}
                     className="w-full bg-white border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-slate-850 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition"
                   />
                 </div>
@@ -532,7 +561,8 @@ export default function Usuarios({
                   <select
                     value={formNivel}
                     onChange={(e) => setFormNivel(e.target.value as any)}
-                    className="w-full border border-slate-200 rounded-xl px-2.5 py-2.5 bg-white text-slate-700"
+                    disabled={editingUsuario?.id === currentUserId}
+                    className={`w-full border border-slate-200 rounded-xl px-2.5 py-2.5 bg-white text-slate-700 ${editingUsuario?.id === currentUserId ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <option value="Administrador">Administrador</option>
                     <option value="Financeiro">Financeiro</option>
@@ -548,7 +578,8 @@ export default function Usuarios({
                   <select
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value as any)}
-                    className="w-full border border-slate-200 rounded-xl px-2.5 py-2.5 bg-white text-slate-700"
+                    disabled={editingUsuario?.id === currentUserId}
+                    className={`w-full border border-slate-200 rounded-xl px-2.5 py-2.5 bg-white text-slate-700 ${editingUsuario?.id === currentUserId ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <option value="Ativo">Ativo</option>
                     <option value="Inativo">Inativo</option>
@@ -575,6 +606,44 @@ export default function Usuarios({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmar Exclusão */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-slate-200">
+            <div className="p-5 flex items-center space-x-3 border-b border-rose-100 bg-rose-50/50">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={20} />
+              </div>
+              <h3 className="font-bold text-lg text-slate-800">Confirmar Exclusão</h3>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-slate-600 font-medium">
+                Tem certeza que deseja remover o usuário <span className="font-bold text-slate-800">{deleteConfirm.name}</span>?
+              </p>
+              <p className="text-[11px] text-slate-450 mt-2">Esta ação não pode ser desfeita e removerá o acesso do usuário ao sistema.</p>
+            </div>
+
+            <div className="px-6 py-4 flex items-center justify-end space-x-2 border-t border-slate-100 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 font-semibold bg-white hover:bg-slate-50 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="px-4 py-2 bg-rose-600 text-white rounded-xl font-bold hover:bg-rose-700 shadow-sm transition cursor-pointer"
+              >
+                Remover
+              </button>
+            </div>
           </div>
         </div>
       )}
