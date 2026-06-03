@@ -276,7 +276,7 @@ export default function Equipe({
                 <input
                   type="email"
                   required
-                  placeholder="carlos.fin@vivaamanha.org"
+                  placeholder="carlos.fin@chicoxavier.org"
                   value={dirEmail}
                   onChange={(e) => setDirEmail(e.target.value)}
                   className="w-full border border-slate-300 rounded px-2.5 py-1.5 focus:border-emerald-500 focus:outline-none"
@@ -385,7 +385,7 @@ export default function Equipe({
                   <input
                     type="email"
                     required
-                    placeholder="mariana@vivaamanha.org"
+                    placeholder="mariana@chicoxavier.org"
                     value={coorEmail}
                     onChange={(e) => setCoorEmail(e.target.value)}
                     className="w-full border border-slate-300 rounded px-2.5 py-1.5"

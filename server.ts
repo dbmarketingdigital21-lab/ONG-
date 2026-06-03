@@ -4,13 +4,41 @@
  */
 
 import express from 'express';
-import path from 'path';
-import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 // --- INICIALIZAÇÃO DA BASE DE DADOS EM ARQUIVO (JSON) ---
+
+import fs from 'fs';
+import path from 'path';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+
+const firebaseConfigParams = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'firebase-applet-config.json'), 'utf-8'));
+const firebaseApp = initializeApp(firebaseConfigParams);
+const dbFirestore = getFirestore(firebaseApp, firebaseConfigParams.firestoreDatabaseId);
+
+async function loadDB() {
+  try {
+    let hasData = false;
+    const keys = Object.keys(db);
+    for (const key of keys) {
+       const snap = await getDoc(doc(dbFirestore, "tables", key));
+       if (snap.exists() && snap.data().data) {
+          db[key] = JSON.parse(snap.data().data);
+          hasData = true;
+       }
+    }
+    if (hasData) {
+       console.log("Loaded DB from Firestore!");
+       fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+    }
+  } catch(e) {
+    console.error("Firestore load error:", e);
+  }
+}
+
 const DB_FILE = path.join(process.cwd(), 'database_osc.json');
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secure-secret-key-osc-2026';
 
@@ -249,13 +277,24 @@ if (fs.existsSync(DB_FILE)) {
 }
 
 // Salva as alterações na base de dados
-function saveDB() {
+async function saveDB() {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+  try {
+     const keys = Object.keys(db);
+     for (const key of keys) {
+        const str = JSON.stringify(db[key]);
+        await setDoc(doc(dbFirestore, "tables", key), { data: str });
+     }
+  } catch(e) {
+     console.error("Firestore save error:", e);
+  }
 }
 
 // Carrega o servidor Express
 async function startServer() {
   const app = express();
+  await loadDB();
+
   const PORT = 3000;
 
   // Middlewares para JSON e codificação de URL com limites elevados para uploads em base64
@@ -272,7 +311,7 @@ async function startServer() {
   });
 
   // Helper para auditoria de ações (Logger)
-  const logSystemAction = (userId: string, userName: string, action: string, req: express.Request) => {
+  const logSystemAction = async (userId: string, userName: string, action: string, req: express.Request) => {
     const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1') as string;
     const newLog = {
       id: `log-${Date.now()}`,
@@ -283,7 +322,7 @@ async function startServer() {
       data_log: new Date().toISOString()
     };
     db.logs_sistema.unshift(newLog); // Últimos primeiro
-    saveDB();
+    await saveDB();
   };
 
   // -------------------------------------------------------------
@@ -331,7 +370,7 @@ async function startServer() {
   // -------------------------------------------------------------
 
   // --- /api/login ---
-  app.post("/api/login", (req, res) => {
+  app.post("/api/login", async (req, res) => {
     const { email, senha } = req.body;
 
     if (!email || !senha) {
@@ -376,7 +415,7 @@ async function startServer() {
       }
     );
 
-    logSystemAction(userFound.id, userFound.nome, `Módulo Autenticação: Login efetuado por ${userFound.nome}`, req);
+    await logSystemAction(userFound.id, userFound.nome, `Módulo Autenticação: Login efetuado por ${userFound.nome}`, req);
     
     return res.json({
       success: true,
@@ -393,7 +432,7 @@ async function startServer() {
   });
 
   // --- /api/debug/me ---
-  app.get("/api/debug/me", (req, res) => {
+  app.get("/api/debug/me", async (req, res) => {
     res.json({
       userHeader: req.headers.authorization,
       reqUser: (req as any).user,
@@ -402,11 +441,11 @@ async function startServer() {
   });
 
   // --- /api/usuarios ---
-  app.get("/api/usuarios", (req, res) => {
+  app.get("/api/usuarios", async (req, res) => {
     res.json(db.usuarios);
   });
 
-  app.post("/api/usuarios", (req, res) => {
+  app.post("/api/usuarios", async (req, res) => {
     const { nome, email, senha, nivel_acesso, status } = req.body;
     if (!nome || !email || !nivel_acesso) {
       return res.status(400).json({ success: false, message: "Campos obrigatórios ausentes." });
@@ -421,12 +460,12 @@ async function startServer() {
       created_at: new Date().toISOString()
     };
     db.usuarios.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Gestão Usuários: Criado usuário ${nome}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Gestão Usuários: Criado usuário ${nome}`, req);
     res.json({ success: true, usuario: novo });
   });
 
-  app.put("/api/usuarios/:id/senha", (req, res) => {
+  app.put("/api/usuarios/:id/senha", async (req, res) => {
     const { id } = req.params;
     const { senhaAtual, novaSenha } = req.body;
     
@@ -443,26 +482,26 @@ async function startServer() {
          return res.status(400).json({ success: false, message: "Senha atual incorreta" });
       }
       db.usuarios[index].senha_hash = bcrypt.hashSync(novaSenha, 10);
-      saveDB();
+      await saveDB();
       return res.json({ success: true, message: "Senha alterada" });
     }
     return res.status(404).json({ success: false, message: "Usuário não encontrado" });
   });
 
-  app.put("/api/usuarios/:id", (req, res) => {
+  app.put("/api/usuarios/:id", async (req, res) => {
     const { id } = req.params;
     const { nome, email, nivel_acesso, status } = req.body;
     const index = db.usuarios.findIndex(u => u.id === id);
     if (index !== -1) {
       db.usuarios[index] = { ...db.usuarios[index], nome, email, nivel_acesso, status };
-      saveDB();
-      logSystemAction("usr-1", "Admin Principal", `Gestão Usuários: Editado usuário ${nome}`, req);
+      await saveDB();
+      await logSystemAction("usr-1", "Admin Principal", `Gestão Usuários: Editado usuário ${nome}`, req);
       return res.json({ success: true, usuario: db.usuarios[index] });
     }
     res.status(404).json({ success: false, message: "Usuário não encontrado" });
   });
 
-  app.delete("/api/usuarios/:id", (req, res) => {
+  app.delete("/api/usuarios/:id", async (req, res) => {
     const { id } = req.params;
     
     const reqUserId = (req as any).user?.id;
@@ -481,99 +520,99 @@ async function startServer() {
     }
 
     db.usuarios = db.usuarios.filter(u => u.id !== id);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Gestão Usuários: Excluído usuário ${userFound.nome}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Gestão Usuários: Excluído usuário ${userFound.nome}`, req);
     res.json({ success: true });
   });
 
   // --- /api/instituicao ---
-  app.get("/api/instituicao", (req, res) => {
+  app.get("/api/instituicao", async (req, res) => {
     res.json(db.instituicao);
   });
 
-  app.post("/api/instituicao", (req, res) => {
+  app.post("/api/instituicao", async (req, res) => {
     db.instituicao = { ...db.instituicao, ...req.body };
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", "Instituição: Atualizou dados institucionais", req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", "Instituição: Atualizou dados institucionais", req);
     res.json({ success: true, dados: db.instituicao });
   });
 
   // --- /api/financeiro ---
-  app.get("/api/financeiro/contas", (req, res) => {
+  app.get("/api/financeiro/contas", async (req, res) => {
     res.json(db.contas_bancarias);
   });
 
-  app.post("/api/financeiro/contas", (req, res) => {
+  app.post("/api/financeiro/contas", async (req, res) => {
     const { banco, agencia, conta, tipo_conta, pixEscrita, titular, status } = req.body;
     const novo = {
       id: `bank-${Date.now()}`,
       banco, agencia, conta, tipo_conta, pixEscrita, titular, status: status || "Ativa"
     };
     db.contas_bancarias.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Gestão Contas: Adicionada conta bancária ${banco} (${conta})`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Gestão Contas: Adicionada conta bancária ${banco} (${conta})`, req);
     res.json({ success: true, conta: novo });
   });
 
-  app.delete("/api/financeiro/contas/:id", (req, res) => {
+  app.delete("/api/financeiro/contas/:id", async (req, res) => {
     db.contas_bancarias = db.contas_bancarias.filter(b => b.id !== req.params.id);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Gestão Contas: Excluída conta bancária id ${req.params.id}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Gestão Contas: Excluída conta bancária id ${req.params.id}`, req);
     res.json({ success: true });
   });
 
-  app.get("/api/financeiro/receitas", (req, res) => {
+  app.get("/api/financeiro/receitas", async (req, res) => {
     res.json(db.receitas);
   });
 
-  app.post("/api/financeiro/receitas", (req, res) => {
+  app.post("/api/financeiro/receitas", async (req, res) => {
     const { categoria, tipo_evento, valor, data, forma_pagamento, observacoes } = req.body;
     const novo = {
       id: `rec-${Date.now()}`,
       categoria, tipo_evento, valor: parseFloat(valor || 0), data, forma_pagamento, observacoes
     };
     db.receitas.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Financeiro: Cadastrada Receita - ${categoria} de R$ ${valor}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Financeiro: Cadastrada Receita - ${categoria} de R$ ${valor}`, req);
     res.json({ success: true, receita: novo });
   });
 
-  app.delete("/api/financeiro/receitas/:id", (req, res) => {
+  app.delete("/api/financeiro/receitas/:id", async (req, res) => {
     db.receitas = db.receitas.filter(r => r.id !== req.params.id);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Financeiro: Removida Receita id ${req.params.id}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Financeiro: Removida Receita id ${req.params.id}`, req);
     res.json({ success: true });
   });
 
-  app.get("/api/financeiro/despesas", (req, res) => {
+  app.get("/api/financeiro/despesas", async (req, res) => {
     res.json(db.despesas);
   });
 
-  app.post("/api/financeiro/despesas", (req, res) => {
+  app.post("/api/financeiro/despesas", async (req, res) => {
     const { categoria, valor, data, fornecedor_id, fornecedor_nome, forma_pagamento, comprovanteUrl } = req.body;
     const novo = {
       id: `des-${Date.now()}`,
       categoria, valor: parseFloat(valor || 0), data, fornecedor_id, fornecedor_nome, forma_pagamento, comprovanteUrl
     };
     db.despesas.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Financeiro: Cadastrada Despesa - ${categoria} de R$ ${valor}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Financeiro: Cadastrada Despesa - ${categoria} de R$ ${valor}`, req);
     res.json({ success: true, despesa: novo });
   });
 
-  app.delete("/api/financeiro/despesas/:id", (req, res) => {
+  app.delete("/api/financeiro/despesas/:id", async (req, res) => {
     db.despesas = db.despesas.filter(d => d.id !== req.params.id);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Financeiro: Removida Despesa id ${req.params.id}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Financeiro: Removida Despesa id ${req.params.id}`, req);
     res.json({ success: true });
   });
 
   // --- /api/estoque ---
-  app.get("/api/estoque", (req, res) => {
+  app.get("/api/estoque", async (req, res) => {
     res.json(db.estoque);
   });
 
-  app.post("/api/estoque", (req, res) => {
+  app.post("/api/estoque", async (req, res) => {
     const { nome_item, nota_fiscal, quantidade, custo, validade, local_armazenagem, categoria, codigo_interno } = req.body;
     const quantNum = parseInt(quantidade || 0);
     const costNum = parseFloat(custo || 0);
@@ -595,12 +634,12 @@ async function startServer() {
       nome_item, nota_fiscal, quantidade: quantNum, custo: costNum, validade, local_armazenagem, categoria, codigo_interno, status
     };
     db.estoque.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Estoque: Adicionado item ${nome_item} (${quantNum} un)`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Estoque: Adicionado item ${nome_item} (${quantNum} un)`, req);
     res.json({ success: true, item: novo });
   });
 
-  app.put("/api/estoque/:id", (req, res) => {
+  app.put("/api/estoque/:id", async (req, res) => {
     const { id } = req.params;
     const { nome_item, nota_fiscal, quantidade, custo, validade, local_armazenagem, categoria, codigo_interno } = req.body;
     const index = db.estoque.findIndex(e => e.id === id);
@@ -624,98 +663,98 @@ async function startServer() {
         ...db.estoque[index],
         nome_item, nota_fiscal, quantidade: quantNum, custo: costNum, validade, local_armazenagem, categoria, codigo_interno, status
       };
-      saveDB();
-      logSystemAction("usr-1", "Admin Principal", `Estoque: Atualizado item ${nome_item}`, req);
+      await saveDB();
+      await logSystemAction("usr-1", "Admin Principal", `Estoque: Atualizado item ${nome_item}`, req);
       return res.json({ success: true, item: db.estoque[index] });
     }
     res.status(404).json({ success: false, message: "Não encontrado" });
   });
 
-  app.delete("/api/estoque/:id", (req, res) => {
+  app.delete("/api/estoque/:id", async (req, res) => {
     const found = db.estoque.find(e => e.id === req.params.id);
     db.estoque = db.estoque.filter(e => e.id !== req.params.id);
-    saveDB();
+    await saveDB();
     if (found) {
-      logSystemAction("usr-1", "Admin Principal", `Estoque: Excluído item ${found.nome_item}`, req);
+      await logSystemAction("usr-1", "Admin Principal", `Estoque: Excluído item ${found.nome_item}`, req);
     }
     res.json({ success: true });
   });
 
   // --- /api/fornecedores ---
-  app.get("/api/fornecedores", (req, res) => {
+  app.get("/api/fornecedores", async (req, res) => {
     res.json(db.fornecedores);
   });
 
-  app.post("/api/fornecedores", (req, res) => {
+  app.post("/api/fornecedores", async (req, res) => {
     const { nome, cnpj, endereco, telefone, email, tipo_fornecedor, dados_bancarios, pix, documentoUrl } = req.body;
     const novo = {
       id: `for-${Date.now()}`,
       nome, cnpj, endereco, telefone, email, tipo_fornecedor, dados_bancarios, pix, documentoUrl
     };
     db.fornecedores.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Fornecedores: Cadastrado fornecedor ${nome}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Fornecedores: Cadastrado fornecedor ${nome}`, req);
     res.json({ success: true, fornecedor: novo });
   });
 
-  app.delete("/api/fornecedores/:id", (req, res) => {
+  app.delete("/api/fornecedores/:id", async (req, res) => {
     const found = db.fornecedores.find(f => f.id === req.params.id);
     db.fornecedores = db.fornecedores.filter(f => f.id !== req.params.id);
-    saveDB();
-    if (found) logSystemAction("usr-1", "Admin Principal", `Fornecedores: Excluído fornecedor ${found.nome}`, req);
+    await saveDB();
+    if (found) await logSystemAction("usr-1", "Admin Principal", `Fornecedores: Excluído fornecedor ${found.nome}`, req);
     res.json({ success: true });
   });
 
   // --- /api/dirigentes ---
-  app.get("/api/dirigentes", (req, res) => {
+  app.get("/api/dirigentes", async (req, res) => {
     res.json(db.dirigentes);
   });
 
-  app.post("/api/dirigentes", (req, res) => {
+  app.post("/api/dirigentes", async (req, res) => {
     const novo = {
       id: `dir-${Date.now()}`,
       ...req.body
     };
     db.dirigentes.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Dirigentes: Adicionado dirigente ${req.body.nome_completo}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Dirigentes: Adicionado dirigente ${req.body.nome_completo}`, req);
     res.json({ success: true, dirigente: novo });
   });
 
-  app.delete("/api/dirigentes/:id", (req, res) => {
+  app.delete("/api/dirigentes/:id", async (req, res) => {
     db.dirigentes = db.dirigentes.filter(d => d.id !== req.params.id);
-    saveDB();
+    await saveDB();
     res.json({ success: true });
   });
 
   // --- /api/coordenadores ---
-  app.get("/api/coordenadores", (req, res) => {
+  app.get("/api/coordenadores", async (req, res) => {
     res.json(db.coordenadores);
   });
 
-  app.post("/api/coordenadores", (req, res) => {
+  app.post("/api/coordenadores", async (req, res) => {
     const novo = {
       id: `coor-${Date.now()}`,
       ...req.body
     };
     db.coordenadores.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Coordenadores: Adicionado coordenador ${req.body.nome}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Coordenadores: Adicionado coordenador ${req.body.nome}`, req);
     res.json({ success: true, coordenador: novo });
   });
 
-  app.delete("/api/coordenadores/:id", (req, res) => {
+  app.delete("/api/coordenadores/:id", async (req, res) => {
     db.coordenadores = db.coordenadores.filter(c => c.id !== req.params.id);
-    saveDB();
+    await saveDB();
     res.json({ success: true });
   });
 
   // --- /api/documentos ---
-  app.get("/api/documentos", (req, res) => {
+  app.get("/api/documentos", async (req, res) => {
     res.json(db.documentos);
   });
 
-  app.post("/api/documentos", (req, res) => {
+  app.post("/api/documentos", async (req, res) => {
     const { categoria, nome, arquivoUrl, validade } = req.body;
     const novo = {
       id: `doc-${Date.now()}`,
@@ -726,25 +765,25 @@ async function startServer() {
       data_upload: new Date().toISOString().split('T')[0]
     };
     db.documentos.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Documentos: Realizado upload de ${nome} (${categoria})`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Documentos: Realizado upload de ${nome} (${categoria})`, req);
     res.json({ success: true, documento: novo });
   });
 
-  app.delete("/api/documentos/:id", (req, res) => {
+  app.delete("/api/documentos/:id", async (req, res) => {
     const found = db.documentos.find(d => d.id === req.params.id);
     db.documentos = db.documentos.filter(d => d.id !== req.params.id);
-    saveDB();
-    if (found) logSystemAction("usr-1", "Admin Principal", `Documentos: Removido documento seguro ${found.nome}`, req);
+    await saveDB();
+    if (found) await logSystemAction("usr-1", "Admin Principal", `Documentos: Removido documento seguro ${found.nome}`, req);
     res.json({ success: true });
   });
 
   // --- /api/pedagogico ---
-  app.get("/api/pedagogico", (req, res) => {
+  app.get("/api/pedagogico", async (req, res) => {
     res.json(db.estudantes);
   });
 
-  app.post("/api/pedagogico", (req, res) => {
+  app.post("/api/pedagogico", async (req, res) => {
     const { nome, escola, diretor, professor, endereco_escola, telefone_escola, horario_aulas, notas, feedback_bimestral, observacoes, documentos } = req.body;
     const novo = {
       id: `est-${Date.now()}`,
@@ -761,56 +800,56 @@ async function startServer() {
       documentos: documentos || []
     };
     db.estudantes.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Pedagógico: Adicionado estudante ${nome}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Pedagógico: Adicionado estudante ${nome}`, req);
     res.json({ success: true, estudante: novo });
   });
 
-  app.put("/api/pedagogico/:id", (req, res) => {
+  app.put("/api/pedagogico/:id", async (req, res) => {
     const { id } = req.params;
     const index = db.estudantes.findIndex(st => st.id === id);
     if (index !== -1) {
       db.estudantes[index] = { ...db.estudantes[index], ...req.body };
-      saveDB();
-      logSystemAction("usr-1", "Admin Principal", `Pedagógico: Atualizado prontuário escolar/notas de ${db.estudantes[index].nome}`, req);
+      await saveDB();
+      await logSystemAction("usr-1", "Admin Principal", `Pedagógico: Atualizado prontuário escolar/notas de ${db.estudantes[index].nome}`, req);
       return res.json({ success: true, estudante: db.estudantes[index] });
     }
     res.status(404).json({ success: false, message: "Não encontrado" });
   });
 
-  app.delete("/api/pedagogico/:id", (req, res) => {
+  app.delete("/api/pedagogico/:id", async (req, res) => {
     const found = db.estudantes.find(st => st.id === req.params.id);
     db.estudantes = db.estudantes.filter(st => st.id !== req.params.id);
-    saveDB();
-    if (found) logSystemAction("usr-1", "Admin Principal", `Pedagógico: Excluído cadastro do aluno ${found.nome}`, req);
+    await saveDB();
+    if (found) await logSystemAction("usr-1", "Admin Principal", `Pedagógico: Excluído cadastro do aluno ${found.nome}`, req);
     res.json({ success: true });
   });
 
   // --- /api/assistencia (Processos, Prontuários, Cestas, Termos) ---
-  app.get("/api/assistencia/processos", (req, res) => {
+  app.get("/api/assistencia/processos", async (req, res) => {
     res.json(db.processos_judiciais);
   });
 
-  app.post("/api/assistencia/processos", (req, res) => {
+  app.post("/api/assistencia/processos", async (req, res) => {
     const { numero_processo, situacao, envolvidos, observacoes } = req.body;
     const novo = { id: `proc-${Date.now()}`, numero_processo, situacao, envolvidos, observacoes };
     db.processos_judiciais.push(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Assistência: Cadastrado processo judicial nº ${numero_processo}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Assistência: Cadastrado processo judicial nº ${numero_processo}`, req);
     res.json({ success: true, processo: novo });
   });
 
-  app.delete("/api/assistencia/processos/:id", (req, res) => {
+  app.delete("/api/assistencia/processos/:id", async (req, res) => {
     db.processos_judiciais = db.processos_judiciais.filter(p => p.id !== req.params.id);
-    saveDB();
+    await saveDB();
     res.json({ success: true });
   });
 
-  app.get("/api/assistencia/prontuarios", (req, res) => {
+  app.get("/api/assistencia/prontuarios", async (req, res) => {
     res.json(db.prontuarios);
   });
 
-  app.post("/api/assistencia/prontuarios", (req, res) => {
+  app.post("/api/assistencia/prontuarios", async (req, res) => {
     const { acolhido, tipo_atendimento, responsavel, observacoes, arquivoUrl } = req.body;
     const novo = {
       id: `pront-${Date.now()}`,
@@ -823,22 +862,22 @@ async function startServer() {
       arquivoUrl
     };
     db.prontuarios.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Assistência/Psico: Elaborado Prontuário para ${acolhido}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Assistência/Psico: Elaborado Prontuário para ${acolhido}`, req);
     res.json({ success: true, prontuario: novo });
   });
 
-  app.delete("/api/assistencia/prontuarios/:id", (req, res) => {
+  app.delete("/api/assistencia/prontuarios/:id", async (req, res) => {
     db.prontuarios = db.prontuarios.filter(p => p.id !== req.params.id);
-    saveDB();
+    await saveDB();
     res.json({ success: true });
   });
 
-  app.get("/api/assistencia/cestas", (req, res) => {
+  app.get("/api/assistencia/cestas", async (req, res) => {
     res.json(db.cestas_basicas);
   });
 
-  app.post("/api/assistencia/cestas", (req, res) => {
+  app.post("/api/assistencia/cestas", async (req, res) => {
     const { recebedor, relacao, quantidade } = req.body;
     const novo = {
       id: `cesta-${Date.now()}`,
@@ -848,22 +887,22 @@ async function startServer() {
       quantidade: parseInt(quantidade || 1)
     };
     db.cestas_basicas.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Assistência: Entregue ${quantidade} cesta básica para ${recebedor}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Assistência: Entregue ${quantidade} cesta básica para ${recebedor}`, req);
     res.json({ success: true, cesta: novo });
   });
 
-  app.delete("/api/assistencia/cestas/:id", (req, res) => {
+  app.delete("/api/assistencia/cestas/:id", async (req, res) => {
     db.cestas_basicas = db.cestas_basicas.filter(c => c.id !== req.params.id);
-    saveDB();
+    await saveDB();
     res.json({ success: true });
   });
 
-  app.get("/api/assistencia/termos", (req, res) => {
+  app.get("/api/assistencia/termos", async (req, res) => {
     res.json(db.termos_responsabilidade);
   });
 
-  app.post("/api/assistencia/termos", (req, res) => {
+  app.post("/api/assistencia/termos", async (req, res) => {
     const { responsavel, ato, descricao, assinatura_digital } = req.body;
     const novo = {
       id: `termo-${Date.now()}`,
@@ -874,24 +913,24 @@ async function startServer() {
       data_criacao: new Date().toISOString()
     };
     db.termos_responsabilidade.unshift(novo);
-    saveDB();
-    logSystemAction("usr-1", "Admin Principal", `Assistência: Termo de Responsabilidade cadastrado para ${responsavel}`, req);
+    await saveDB();
+    await logSystemAction("usr-1", "Admin Principal", `Assistência: Termo de Responsabilidade cadastrado para ${responsavel}`, req);
     res.json({ success: true, termo: novo });
   });
 
-  app.delete("/api/assistencia/termos/:id", (req, res) => {
+  app.delete("/api/assistencia/termos/:id", async (req, res) => {
     db.termos_responsabilidade = db.termos_responsabilidade.filter(t => t.id !== req.params.id);
-    saveDB();
+    await saveDB();
     res.json({ success: true });
   });
 
   // --- /api/logs ---
-  app.get("/api/logs", (req, res) => {
+  app.get("/api/logs", async (req, res) => {
     res.json(db.logs_sistema);
   });
 
   // --- /api/backup (Simulação) ---
-  app.get("/api/backup/download", (req, res) => {
+  app.get("/api/backup/download", async (req, res) => {
     res.setHeader('Content-disposition', 'attachment; filename=backup_banco_osc.sql');
     res.setHeader('Content-type', 'application/sql');
     
@@ -939,7 +978,7 @@ VALUES (1, 'ONG Chico Xavier', 'ONG Chico Xavier', '12.345.678/0001-90', '${db.i
 
   // --- /api/php-mvc/export-manifest ---
   // Retorna os códigos fontes principais do PHP MVC para visualização diretamente nos modais
-  app.get("/api/php-mvc/export-manifest", (req, res) => {
+  app.get("/api/php-mvc/export-manifest", async (req, res) => {
     res.json({
       success: true,
       sqlitePersistenceAlert: "A aplicação local Node.js salva os dados de modo persistente em '/database_osc.json'. O pacote de deploy completo PHP MVC já está gerado na pasta /php-mvc/ em sua raiz no GitHub!",

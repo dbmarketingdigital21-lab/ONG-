@@ -59,7 +59,7 @@ export default function Sidebar({ activeTab, setActiveTab, nivelAcesso }: Sideba
           G
         </div>
         <div>
-          <h1 className="text-sm font-bold tracking-tight text-white uppercase font-display">Gestão OSC</h1>
+          <h1 className="text-sm font-bold tracking-tight text-white uppercase font-display">ONG Chico Xavier</h1>
           <p className="text-[10px] text-[#38bdf8]/85 font-mono">ONG Chico Xavier • v2.4.0</p>
         </div>
       </div>
