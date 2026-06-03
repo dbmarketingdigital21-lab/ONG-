@@ -331,7 +331,7 @@ export default function Instituicao({ dados, onSaveDados, userRole }: Instituica
                 value={redes}
                 onChange={(e) => setRedes(e.target.value)}
                 className="w-full border border-slate-300 rounded px-2.5 py-1.5"
-                placeholder="Instagram: @vivaamanha - Facebook: /vivaamanha"
+                placeholder="Instagram: @chicoxavier - Facebook: /chicoxavier"
               />
             </div>
           </div>
@@ -367,7 +367,7 @@ export default function Instituicao({ dados, onSaveDados, userRole }: Instituica
             </div>
             <div className="text-center">
               <h3 className="font-bold text-slate-850 text-sm">Logomarca Oficial</h3>
-              <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-semibold font-mono">Associação Viva o Amanhã</p>
+              <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider font-semibold font-mono">ONG Chico Xavier</p>
             </div>
           </div>
 

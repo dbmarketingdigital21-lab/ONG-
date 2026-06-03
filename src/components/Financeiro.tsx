@@ -73,7 +73,7 @@ export default function Financeiro({
   const [bancoCc, setBancoCc] = useState('');
   const [bancoTipo, setBancoTipo] = useState<'Corrente' | 'Poupança' | 'Aplicação'>('Corrente');
   const [bancoPix, setBancoPix] = useState('');
-  const [bancoTitular, setBancoTitular] = useState('Associação Viva o Amanhã');
+  const [bancoTitular, setBancoTitular] = useState('ONG Chico Xavier');
 
   // Estado de Importação de Arquivo Bancário
   const [importStatus, setImportStatus] = useState<string | null>(null);

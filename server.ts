@@ -76,8 +76,8 @@ const DADOS_INICIAIS: LocalDB = {
   ],
   instituicao: {
     id: "inst-1",
-    razao_social: "Associação Viva o Amanhã - AVA",
-    nome_fantasia: "Viva o Amanhã",
+    razao_social: "ONG Chico Xavier",
+    nome_fantasia: "ONG Chico Xavier",
     cnpj: "12.345.678/0001-90",
     inscricao_estadual: "110.220.330.440",
     inscricao_municipal: "987.654.32",
@@ -92,9 +92,9 @@ const DADOS_INICIAIS: LocalDB = {
     estado: "SP",
     telefone: "(11) 3254-8900",
     whatsapp: "(11) 98888-7777",
-    email: "contato@vivaamanha.org.br",
-    site: "www.vivaamanha.org.br",
-    redes_sociais: "Facebook/Instagram: @vivaamanha",
+    email: "contato@chicoxavier.org.br",
+    site: "www.chicoxavier.org.br",
+    redes_sociais: "Facebook/Instagram: @chicoxavier",
     logoUrl: ""
   },
   contas_bancarias: [
@@ -104,8 +104,8 @@ const DADOS_INICIAIS: LocalDB = {
       agencia: "1234-5",
       conta: "98765-4",
       tipo_conta: "Corrente",
-      pixEscrita: "financeiro@vivaamanha.org.br",
-      titular: "Associação Viva o Amanhã",
+      pixEscrita: "financeiro@chicoxavier.org.br",
+      titular: "ONG Chico Xavier",
       status: "Ativa"
     },
     {
@@ -115,7 +115,7 @@ const DADOS_INICIAIS: LocalDB = {
       conta: "19283-7",
       tipo_conta: "Corrente",
       pixEscrita: "12.345.678/0001-90",
-      titular: "Associação Viva o Amanhã",
+      titular: "ONG Chico Xavier",
       status: "Ativa"
     }
   ],
@@ -143,12 +143,12 @@ const DADOS_INICIAIS: LocalDB = {
     { id: "for-4", nome: "Elétrica Silva & Silva", cnpj: "99.888.777/0001-22", endereco: "Rua do Gasômetro, 400", telefone: "(11) 97777-6666", email: "silvaconstrucoes@outlook.com", tipo_fornecedor: "Manutenção predial" }
   ],
   dirigentes: [
-    { id: "dir-1", nome_completo: "Dr. Carlos Eduardo Menezes", cpf: "123.456.789-01", rg: "12.345.678-X", cargo: "Presidente", telefone: "(11) 98122-3344", email: "carlos.president@vivaamanha.org", data_inicio_mandato: "2025-01-01", data_fim_mandato: "2027-12-31", status: "Ativo" },
-    { id: "dir-2", nome_completo: "Profa. Maria Augusta Souza", cpf: "987.654.321-02", rg: "10.987.654-3", cargo: "Secretária Geral", telefone: "(11) 97000-1122", email: "maria.augusta@vivaamanha.org", data_inicio_mandato: "2025-01-01", data_fim_mandato: "2027-12-31", status: "Ativo" }
+    { id: "dir-1", nome_completo: "Dr. Carlos Eduardo Menezes", cpf: "123.456.789-01", rg: "12.345.678-X", cargo: "Presidente", telefone: "(11) 98122-3344", email: "carlos.president@chicoxavier.org", data_inicio_mandato: "2025-01-01", data_fim_mandato: "2027-12-31", status: "Ativo" },
+    { id: "dir-2", nome_completo: "Profa. Maria Augusta Souza", cpf: "987.654.321-02", rg: "10.987.654-3", cargo: "Secretária Geral", telefone: "(11) 97000-1122", email: "maria.augusta@chicoxavier.org", data_inicio_mandato: "2025-01-01", data_fim_mandato: "2027-12-31", status: "Ativo" }
   ],
   coordenadores: [
-    { id: "coor-1", nome: "Mariana Costa", cpf: "111.222.333-44", cargo: "Coordenadora de Projetos", telefone: "(11) 98222-7788", email: "mariana.projetos@vivaamanha.org", projeto_vinculado: "Acolher com Leitura", status: "Ativo" },
-    { id: "coor-2", nome: "Fernando Pinto", cpf: "555.666.777-88", cargo: "Coordenador de Esportes", telefone: "(11) 99333-8822", email: "fernando.esportes@vivaamanha.org", projeto_vinculado: "Futebol do Amanhã", status: "Ativo" }
+    { id: "coor-1", nome: "Mariana Costa", cpf: "111.222.333-44", cargo: "Coordenadora de Projetos", telefone: "(11) 98222-7788", email: "mariana.projetos@chicoxavier.org", projeto_vinculado: "Acolher com Leitura", status: "Ativo" },
+    { id: "coor-2", nome: "Fernando Pinto", cpf: "555.666.777-88", cargo: "Coordenador de Esportes", telefone: "(11) 99333-8822", email: "fernando.esportes@chicoxavier.org", projeto_vinculado: "Futebol do Amanhã", status: "Ativo" }
   ],
   estudantes: [
     {
@@ -222,27 +222,9 @@ if (fs.existsSync(DB_FILE)) {
   try {
     db = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
     
-    // Atualiza/Garante senhas dos usuários padrão criptografadas com bcryptjs de forma ativa e sem bypass
+    // Verifica se precisa criar o Admin padrão da plataforma
     let DB_ALTERADO = false;
-    db.usuarios.forEach(user => {
-      if (user.email === "admin@osc.org.br" && (!bcrypt.compareSync("admin123", user.senha_hash || ''))) {
-        user.senha_hash = bcrypt.hashSync("admin123", 10);
-        DB_ALTERADO = true;
-      } else if (user.email === "financeiro@osc.org.br" && (!bcrypt.compareSync("financeiro123", user.senha_hash || ''))) {
-        user.senha_hash = bcrypt.hashSync("financeiro123", 10);
-        DB_ALTERADO = true;
-      } else if (user.email === "coordenador@osc.org.br" && (!bcrypt.compareSync("coordenador123", user.senha_hash || ''))) {
-        user.senha_hash = bcrypt.hashSync("coordenador123", 10);
-        DB_ALTERADO = true;
-      } else if (user.email === "viewer@osc.org.br" && (!bcrypt.compareSync("viewer123", user.senha_hash || ''))) {
-        user.senha_hash = bcrypt.hashSync("viewer123", 10);
-        DB_ALTERADO = true;
-      } else if (user.email === "dbmarktdigital@gmail.com" && (!bcrypt.compareSync("admin123", user.senha_hash || ''))) {
-        user.senha_hash = bcrypt.hashSync("admin123", 10);
-        DB_ALTERADO = true;
-      }
-    });
-
+    
     if (!db.usuarios.find(u => u.email === "dbmarktdigital@gmail.com")) {
       db.usuarios.push({
         id: "usr-" + Date.now().toString(),
@@ -279,6 +261,15 @@ async function startServer() {
   // Middlewares para JSON e codificação de URL com limites elevados para uploads em base64
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+  // Middleware para desabilitar cache em todas as rotas de API (Corrige "Uso incorreto de cache")
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Surrogate-Control', 'no-store');
+    next();
+  });
 
   // Helper para auditoria de ações (Logger)
   const logSystemAction = (userId: string, userName: string, action: string, req: express.Request) => {
@@ -941,7 +932,7 @@ CREATE TABLE IF NOT EXISTS \`instituicao\` (
 
 -- INSERINDO DADOS INSTITUCIONAIS MOCKADOS
 INSERT INTO \`instituicao\` (\`id\`, \`razao_social\`, \`nome_fantasia\`, \`cnpj\`, \`telefone\`, \`email\`, \`endereco\`) 
-VALUES (1, 'Associação Viva o Amanhã - AVA', 'Viva o Amanhã', '12.345.678/0001-90', '${db.instituicao.telefone}', '${db.instituicao.email}', '${db.instituicao.rua}, ${db.instituicao.numero}, ${db.instituicao.bairro} - ${db.instituicao.cidade}/${db.instituicao.estado}');
+VALUES (1, 'ONG Chico Xavier', 'ONG Chico Xavier', '12.345.678/0001-90', '${db.instituicao.telefone}', '${db.instituicao.email}', '${db.instituicao.rua}, ${db.instituicao.numero}, ${db.instituicao.bairro} - ${db.instituicao.cidade}/${db.instituicao.estado}');
 `;
     res.send(dump);
   });

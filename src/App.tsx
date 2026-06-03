@@ -183,6 +183,10 @@ export default function App() {
 
   const authFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const nextInit = { ...init };
+    // Evita respostas cacheadas pelo navegador (Corrige "Uso incorreto de cache")
+    if (!nextInit.cache) {
+      nextInit.cache = 'no-store';
+    }
     const nextHeaders = new Headers(nextInit.headers || {});
     if (token && !nextHeaders.has('Authorization')) {
       nextHeaders.set('Authorization', `Bearer ${token}`);
@@ -672,7 +676,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-xs font-black tracking-widest uppercase text-slate-900 font-sans">Gestor OSC</h1>
-              <p className="text-[10px] text-slate-500 font-mono tracking-tight font-medium">Viva o Amanhã - Sistema Consolidado</p>
+              <p className="text-[10px] text-slate-500 font-mono tracking-tight font-medium">ONG Chico Xavier - Sistema Consolidado</p>
             </div>
           </div>
           <span className="text-[9px] font-mono tracking-wider text-slate-450 uppercase font-semibold bg-white border border-slate-205 rounded px-2 py-0.5">AVA-V1.0</span>
@@ -753,7 +757,7 @@ export default function App() {
 
         {/* Footer */}
         <div className="w-full text-center text-[10px] text-slate-400 font-mono tracking-tight z-10 select-none">
-          <span>© {new Date().getFullYear()} Viva o Amanhã. Desenvolvido para conformidade rigorosa com cPanel/VPS.</span>
+          <span>© {new Date().getFullYear()} ONG Chico Xavier. Desenvolvido para conformidade rigorosa com cPanel/VPS.</span>
         </div>
       </div>
     );
